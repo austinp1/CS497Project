@@ -19,11 +19,14 @@ exports.challengeParametersGet = async function(req, res, next) {
     await Challenge.find({"id": challengeId}, {_id:0, testCases:1, id:1}, function(err, result){
         if(err){
             res.status(500).json({ message: "Challenges service was unable to retrieve challenge tests"});
+            return;
         } else {  
             if(result.length == 0){
                 res.status(404).json({ message: `Challenge with id:${challengeId} does not exist`});
+                return;
             }
             res.status(200).json(result[0]);
+            return;
         } 
     });
 }
@@ -43,16 +46,14 @@ exports.getChallengeSet = async function(req, res, next){
     await Challenge.find({},{_id:0, __v: 0}, function(err, result) {    // excludes the _id and _v fields in the returned challenge objects
         if(err){
             res.status(500).json({ message: "Challenges service was unable to retrieve the challenge set"});
+            return;
         } else {     
             res.status(200).json({challenges: result}); 
+            return;
         }
     }) 
     .limit(maxChallengesPerPage);
 }
-
-
-
-
 
 // RETURNS HIGHSCORE OBJECTS FOR SPECIFIED CHALLENGE ///
 exports.getHighscores = async function(req, res, next){
@@ -62,13 +63,16 @@ exports.getHighscores = async function(req, res, next){
 
     if(challengeId == null || programmingLanguage == null){
         if(challengeId == null && programmingLanguage == null){
-            return res.status(400).json({ message: `Please specify a challengeId and programmingLanguage in the query parameters`});
+            res.status(400).json({ message: `Please specify a challengeId and programmingLanguage in the query parameters`});
+            return;
         }
         if(challengeId == null){
-            return res.status(400).json({ message: `Please specify a challengeId in the query parameters`});
+            res.status(400).json({ message: `Please specify a challengeId in the query parameters`});
+            return;
         }
         if(programmingLanguage == null){
-            return res.status(400).json({ message: `Please specify a programmingLanguage in the query parameters`});
+            res.status(400).json({ message: `Please specify a programmingLanguage in the query parameters`});
+            return;
         }
     }
 
@@ -78,107 +82,109 @@ exports.getHighscores = async function(req, res, next){
     .then(response => response.json())  // Parse response
     .then(data =>{
         if(data.status != 'success'){
-            return res.status(500).json({ message: "Challenges service was unable to retrieve highscores"});
+            res.status(500).json({ message: "Challenges service was unable to retrieve highscores"});
+            return;
         }
         var submissions = makeSubmissionObjects(data);  // Convert thinhs response to objects
         if(submissions.length == 0){
-            return res.status(404).json({ message: "The challengeId or programmingLanguage does not exist"});     
+            res.status(404).json({ message: "The challengeId or programmingLanguage does not exist"});     
+            return;
         }
         console.log("Recieved highscores from submissions service");
-        return res.status(200).json({"submissions":submissions});
+            res.status(200).json({"submissions":submissions});
+            return;
     })                            
     .catch(err =>{
         console.log(err);
-        return res.status(500).json({ message: "Challenges service was unable to retrieve highscores"});
+        res.status(500).json({ message: "Challenges service was unable to retrieve highscores"});
+        return;
     }); 
 }
+
 
 /// SAVE A NEW CHALLENGE TO DB ///
 exports.challengeCreatePost = async function(req, res, next){
     console.log(req.body);
     var challengeName = req.body.name
+
     // Check if a challenge with the same name already exists
-    await Challenge.exists({'name': challengeName}, function(err, result){
+    Challenge.exists({'name': challengeName}, function(err, isDuplicate){
         if(err){
-            console.log(err);
-            return res.status(500).json({ message: "Challenges service encounted an error while saving challenge to database"});  
-        } else if(result == true){  // the challenge already exists
-            return res.status(409).json({ message: "A challenge with that name already exists"});
-        } 
+            console.log("MONGODB ERROR");
+            res.status(500).json({ message:"Challenges service encounted an error while saving challenge to database"});
+            return;
+        }
+
+        if(isDuplicate){
+            console.log(isDuplicate); 
+            console.log("A challenge with that name already exists");
+            res.status(409).json({ message: "A challenge with that name already exists"});
+            return;
+        } else {
+            console.log(isDuplicate); 
+            console.log("MADE IT HERE");
+            // Create new db object from our model
+            var newChallenge = new Challenge();
+            newChallenge.name = challengeName;
+            newChallenge.description = req.body.description;
+            newChallenge.difficulty = req.body.difficulty;
+        
+            // Add test cases to our db object
+            // Case 1: There are multiple test cases
+            var testCaseSet = [];
+            if ( req.body.testInput instanceof Array ) {
+                for(var i in req.body.testInput){
+                    var testCase = {};
+                    testCase.input = JSON.parse(req.body.testInput[i]);
+                    testCase.expectedOutput = JSON.parse(req.body.testExpected[i]);
+                    testCaseSet.push(testCase);
+                }   
+            // Case 2: Only 1 test case
+            } else {
+                console.log(req.body.testInput);
+                var testCase = {};
+                testCase.input = JSON.parse(req.body.testInput);
+                testCase.expectedOutput = JSON.parse(req.body.testExpected);
+                testCaseSet.push(testCase);
+            }
+            newChallenge.testCases = testCaseSet;
+        
+        
+            // Save challenge to database
+            newChallenge.save(function(err, result){
+                if(err){
+                    console.log(err);
+                    res.status(500).json({ message: "Challenges service encounted an error while saving challenge to database"});  
+                    return;
+                } else { 
+                    res.status(201).json({ message: `Challenge created successfully!`});
+                    return;
+                }
+            }); 
+        }
     });
 
-    console.log("hereeee");
-    // Challenge Name is unique if we are here
-    // Create new db object from our model
-    var newChallenge = new Challenge();
-    newChallenge.name = challengeName;
-    newChallenge.description = req.body.description;
-    newChallenge.difficulty = req.body.difficulty;
-    
-    // Add test cases to our db object
-    // STILL NEED TO VALIDATE TEST INPUTS (THEY MUST BE ARRAYS)
-    // Case 1: There are multiple test cases
-    var testCaseSet = [];
-    if ( req.body.testInput instanceof Array ) {
-        for(var i in req.body.testInput){
-            var testCase = {};
-            testCase.input = JSON.parse(req.body.testInput[i]);
-            testCase.expectedOutput = JSON.parse(req.body.testExpected[i]);
-            testCaseSet.push(testCase);
-        }   
-    // Case 2: Only 1 test case
-    } else {
-        console.log(req.body.testInput);
-        var testCase = {};
-        testCase.input = JSON.parse(req.body.testInput);
-        testCase.expectedOutput = JSON.parse(req.body.testExpected);
-        testCaseSet.push(testCase);
-    }
-    newChallenge.testCases = testCaseSet;
-    
-    // save the new challenge in our data base
-    await newChallenge.save(function(err, result){
-        if(err){
-            console.log(err);
-            return res.status(500).json({ message: "Challenges service encounted an error while saving challenge to database"});  
-        } else { 
-            return res.status(201).json({ message: `Challenge created successfully!`});
-        }
-    }); 
 }
+
+// async function saveChallenge(req, res, newChallenge){
+//     await newChallenge.save(function(err, result){
+//         if(err){
+//             console.log(err);
+//             res.status(500).json({ message: "Challenges service encounted an error while saving challenge to database"});  
+//             return;
+//         } else { 
+//             res.status(201).json({ message: `Challenge created successfully!`});
+//             return;
+//         }
+//     }); 
+// }
+
 
 /// DELETE ALL DOCUMENTS IN DB ///
 exports.deleteAllDocuments = async function(req,res){
     await Challenge.deleteMany({}, function(){
         console.log("All documents deleted from database");
     });
-}
-
-/// TEST REQUESTS ///
-exports.test = function(req, res, next){
-    var data = [
-        {
-            "challengeName": "chal 1",
-            "userName": "thinhFam",
-            "executionTime": "1000",
-            "dateSubmitted": "10/23/2020",
-            "programmingLanguage": "Java",
-        },
-        {   "challengeName": "chal 1",
-            "userName": "austinp",
-            "executionTime": "10",
-            "dateSubmitted": "10/22/2020",
-            "programmingLanguage": "Java"
-        },
-        {   "challengeName": "chal 1",
-            "userName": "derpthemeus",
-            "executionTime": "1",
-            "dateSubmitted": "10/22/2030",
-            "programmingLanguage": "TypeScript"
-    }
-        
-    ];
-    res.render("highscores", {"data":data});
 }
 
 

@@ -36,7 +36,7 @@ router.get("/highscores", createChallengeController.highscoresPageGet);
 ///=========================================================================///
 
 /// TEST ROUTE ///
-router.get("/test", createChallengeController.test);
+// router.get("/test", createChallengeController.test);
 
 module.exports = router;
 
