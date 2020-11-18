@@ -1,5 +1,4 @@
 
 node_modules/*
-*.js
 Sessions/node_modules/*
 .vs/*
