@@ -2,6 +2,8 @@
 const Challenge = require('../models/challenge');
 const fetch = require('node-fetch');
 
+// const redisServer = require(`../server`);
+
 const hostname = 'http://submission-history:';
 const submissionPort = '5050';
 const submissionHostname = 'http://submission-history:';
@@ -35,7 +37,8 @@ exports.challengeParametersGet = async function(req, res, next) {
 /// RETURNS SPECIFIED NUMBER OF CHALLENGE OBJECTS ///
 exports.getChallengeSet = async function(req, res, next){
     console.log("Challenges: Received a request for the challenge set");
-    var numChallenges = req.query.numChallenges;
+    var numChallenges = JSON.parse(req.query.numChallenges);
+    console.log(numChallenges);
 
     // Default number of challenges to return if num challenges is not specified
     if(numChallenges == null){
@@ -150,7 +153,6 @@ exports.challengeCreatePost = async function(req, res, next){
                 testCaseSet.push(testCase);
             }
             newChallenge.testCases = testCaseSet;
-        
         
             // Save challenge to database
             newChallenge.save(function(err, result){
